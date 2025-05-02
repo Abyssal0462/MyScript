@@ -1,6 +1,6 @@
 # USR Hub Official
 
-**USR Hub Official** is a universal Roblox
+**USR Hub Official** is a universal Roblox. Discord link at bio
 
 ---
 
