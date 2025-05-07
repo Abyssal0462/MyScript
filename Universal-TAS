@@ -22,4 +22,208 @@ local loader = [[
          ~~                       \/____/                  \|___|                                                \/____/                  \/____/         
 ]]
 print(loader)
-loadstring(game:HttpGet('https://pastebin.com/raw/CMVqTtHb'))()
+
+
+-- Load Rayfield UI
+loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local PathfindingService = game:GetService("PathfindingService")
+local UserInputService = game:GetService("UserInputService")
+local lp = Players.LocalPlayer
+
+local function getHRP()
+    return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function getHumanoid()
+    return lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
+end
+
+-- State
+local recordedPositions = {}
+local recording = false
+local replaying = false
+
+-- FLING GLITCH
+local function fling()
+    local hrp = getHRP()
+    if not hrp then return end
+    local thrust = Instance.new("BodyThrust")
+    thrust.Force = Vector3.new(999999, 999999, 999999)
+    thrust.Location = hrp.Position
+    thrust.Parent = hrp
+    task.wait(0.25)
+    thrust:Destroy()
+end
+
+-- MOVE FAST
+local function fastMoveTo(pos)
+    local hrp = getHRP()
+    if not hrp then return end
+    local dist = (hrp.Position - pos).Magnitude
+    local tween = TweenService:Create(hrp, TweenInfo.new(dist / 150, Enum.EasingStyle.Linear), {CFrame = CFrame.new(pos)})
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+-- AUTOPATH
+local function autoPathTo(targetPos)
+    local hum = getHumanoid()
+    if not hum then return end
+    local path = PathfindingService:CreatePath({AgentRadius = 2, AgentHeight = 5, AgentCanJump = true})
+    path:ComputeAsync(getHRP().Position, targetPos)
+
+    if path.Status == Enum.PathStatus.Complete then
+        for _, wp in pairs(path:GetWaypoints()) do
+            if wp.Action == Enum.PathWaypointAction.Jump then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+            hum:MoveTo(wp.Position)
+            hum.MoveToFinished:Wait()
+        end
+    else
+        Rayfield:Notify({Title = "Path Failed", Content = "Cannot reach the target position", Duration = 2})
+    end
+end
+
+-- RECORDING
+local function startRecording()
+    recordedPositions = {}
+    recording = true
+    Rayfield:Notify({Title = "Recording", Content = "Recording started", Duration = 2})
+end
+
+local function stopRecording()
+    recording = false
+    Rayfield:Notify({Title = "Recording", Content = "Recording stopped", Duration = 2})
+end
+
+-- REPLAY
+local function replayPath()
+    if #recordedPositions == 0 then
+        Rayfield:Notify({Title = "Replay", Content = "No recorded data", Duration = 2})
+        return
+    end
+    replaying = true
+    for _, pos in ipairs(recordedPositions) do
+        if not replaying then break end
+        fastMoveTo(pos)
+    end
+    replaying = false
+end
+
+local function stopReplay()
+    replaying = false
+end
+
+-- UI SETUP
+local Window = Rayfield:CreateWindow({
+   Name = "TAS Script - Super",
+   Icon = 0,
+   LoadingTitle = "Injecting Speed...",
+   LoadingSubtitle = "by Abyssal",
+   Theme = "Default",
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+
+   ConfigurationSaving = {
+      Enabled = false,
+      FolderName = nil, 
+      FileName = "USR"
+   },
+
+   Discord = {
+      Enabled = true,
+      Invite = "t5VtTSc9ny",
+      RememberJoins = true
+   },
+
+   KeySystem = false,
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"Hi"}
+   }
+})
+
+local Tab = Window:CreateTab("TAS Controls", 4483362458)
+
+Tab:CreateInput({
+    Name = "Target Position (X, Y, Z)",
+    PlaceholderText = "Example: 10, 5, -100",
+    Callback = function(txt)
+        local x, y, z = txt:match("([^,]+),%s*([^,]+),%s*([^,]+)")
+        if x and y and z then
+            local pos = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
+            autoPathTo(pos)
+        else
+            Rayfield:Notify({Title = "Invalid Format", Content = "Use format: X, Y, Z", Duration = 2})
+        end
+    end
+})
+
+Tab:CreateButton({
+    Name = "⚡ Activate Fling",
+    Callback = fling
+})
+
+Tab:CreateButton({
+    Name = "⏺ Start Recording",
+    Callback = startRecording
+})
+
+Tab:CreateButton({
+    Name = "⏹ Stop Recording",
+    Callback = stopRecording
+})
+
+Tab:CreateButton({
+    Name = "▶ Replay Movement",
+    Callback = replayPath
+})
+
+Tab:CreateButton({
+    Name = "❌ Stop Replay",
+    Callback = stopReplay
+})
+
+Tab:CreateButton({
+    Name = "📋 Copy My Coordinates",
+    Callback = function()
+        local hrp = getHRP()
+        if hrp then
+            local pos = hrp.Position
+            local str = string.format("%.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z)
+            setclipboard(str)
+            Rayfield:Notify({Title = "Copied!", Content = "Your position has been copied.", Duration = 2})
+        else
+            Rayfield:Notify({Title = "Error", Content = "Character not found", Duration = 2})
+        end
+    end
+})
+
+-- RECORD ON HEARTBEAT
+RunService.Heartbeat:Connect(function()
+    if recording and getHRP() then
+        table.insert(recordedPositions, getHRP().Position)
+    end
+end)
+
+-- KEYBINDS: T = record toggle, R = replay toggle
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.T then
+        if not recording then startRecording() else stopRecording() end
+    elseif input.KeyCode == Enum.KeyCode.R then
+        if not replaying then replayPath() else stopReplay() end
+    end
+end)
+
