@@ -14,3 +14,6 @@ TAS Script - Beta:
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Abyssal0462/MyScript/refs/heads/main/Universal-TAS"))()
 ```
+
+Tested Executor :
+Xeno, Delta
